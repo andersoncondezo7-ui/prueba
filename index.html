@@ -3,80 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prueba de Voz - Mantenimiento</title>
+    <title>Asistente de Medición</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; }
-        .campo-voz { 
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; text-align: center; }
+        .campo { 
             width: 100%; padding: 15px; margin-top: 5px; margin-bottom: 20px; 
-            font-size: 16px; border: 2px solid #ccc; border-radius: 8px; box-sizing: border-box; 
+            font-size: 18px; border: 2px solid #ccc; border-radius: 8px; box-sizing: border-box; text-align: center;
         }
-        label { font-weight: bold; color: #333; }
-        .instrucciones { color: #666; font-size: 14px; margin-bottom: 20px; }
+        label { font-weight: bold; color: #333; display: block; text-align: left; }
+        #btnIniciar {
+            background-color: #0056b3; color: white; border: none; padding: 15px 30px; 
+            font-size: 18px; border-radius: 8px; cursor: pointer; width: 100%; margin-bottom: 30px;
+        }
+        #btnIniciar:active { background-color: #004494; }
+        #estado { font-weight: bold; color: #d9534f; margin-bottom: 20px; height: 20px; }
     </style>
 </head>
 <body>
-    <h2>Registro de Corrientes</h2>
-    <p class="instrucciones">Toca el primer campo y dicta el valor. El sistema escribirá el número y saltará al siguiente cable automáticamente.</p>
+    <h2>Asistente de Medición</h2>
+    <button id="btnIniciar">🎙️ Iniciar Registro de Rutina</button>
+    <div id="estado">Esperando iniciar...</div>
 
-    <label for="faseR">Fase R (Amperios):</label>
-    <input type="text" id="faseR" class="campo-voz" placeholder="Toca aquí para dictar...">
+    <label for="faseR">Corriente Fase R:</label>
+    <input type="text" id="faseR" class="campo" readonly placeholder="---">
 
-    <label for="faseS">Fase S (Amperios):</label>
-    <input type="text" id="faseS" class="campo-voz" placeholder="Toca aquí para dictar...">
+    <label for="faseS">Corriente Fase S:</label>
+    <input type="text" id="faseS" class="campo" readonly placeholder="---">
 
-    <label for="faseT">Fase T (Amperios):</label>
-    <input type="text" id="faseT" class="campo-voz" placeholder="Toca aquí para dictar...">
+    <label for="faseT">Corriente Fase T:</label>
+    <input type="text" id="faseT" class="campo" readonly placeholder="---">
 
     <script>
-        // Inicializamos el motor nativo del navegador
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const synth = window.speechSynthesis;
 
-        if (SpeechRecognition) {
+        if (!SpeechRecognition || !synth) {
+            alert("Tu navegador no soporta el asistente de voz. Usa Google Chrome.");
+        } else {
             const recognition = new SpeechRecognition();
-            recognition.lang = 'es-PE'; // Configurado para nuestro acento
+            recognition.lang = 'es-PE';
             recognition.continuous = false;
             recognition.interimResults = false;
 
-            const campos = document.querySelectorAll('.campo-voz');
+            // Secuencia de preguntas
+            const pasos = [
+                { id: 'faseR', pregunta: "Por favor, indique la corriente de la Fase R" },
+                { id: 'faseS', pregunta: "Indique la corriente de la Fase S" },
+                { id: 'faseT', pregunta: "Indique la corriente de la Fase T" }
+            ];
+            
+            let pasoActual = 0;
+            const estadoDiv = document.getElementById('estado');
 
-            campos.forEach((campo, index) => {
-                campo.addEventListener('focus', () => {
-                    campo.placeholder = "¡Habla ahora!...";
-                    campo.style.borderColor = "#007BFF"; // Borde azul al escuchar
-                    campo.style.backgroundColor = "#E9F2FF";
-                    
-                    try { recognition.start(); } catch(e) {}
-
-                    recognition.onresult = (event) => {
-                        let valorDictado = event.results[0][0].transcript;
-                        // Extraemos solo los números (ej. si dice "doscientos" tratará de poner 200, si dice "12 amperios" pone 12)
-                        campo.value = valorDictado.replace(/[^0-9.,]/g, ''); 
-                        
-                        campo.style.borderColor = "#28A745"; // Borde verde al terminar
-                        campo.style.backgroundColor = "#E6FFED";
-
-                        // Avanzar al siguiente cable
-                        if (index + 1 < campos.length) {
-                            campos[index + 1].focus();
-                        } else {
-                            // Cuando termina el último
-                            document.activeElement.blur();
-                            setTimeout(() => alert("Mediciones de celda completadas."), 200);
-                        }
-                    };
-
-                    recognition.onspeechend = () => { recognition.stop(); };
-
-                    recognition.onerror = (event) => {
-                        campo.placeholder = "No se escuchó. Toca de nuevo.";
-                        campo.style.borderColor = "#DC3545"; // Borde rojo por error
-                        campo.style.backgroundColor = "#FFECEC";
-                        campo.blur(); // Quitamos el foco para permitir reintentar
-                    };
-                });
+            document.getElementById('btnIniciar').addEventListener('click', () => {
+                pasoActual = 0; // Reiniciamos si vuelve a darle clic
+                document.querySelectorAll('.campo').forEach(c => c.value = ''); // Limpiamos campos
+                hacerPregunta();
             });
-        } else {
-            alert("Tu navegador no soporta el dictado por voz. Usa Google Chrome.");
+
+            function hacerPregunta() {
+                if (pasoActual >= pasos.length) {
+                    hablar("Mediciones completadas exitosamente.", false);
+                    estadoDiv.innerText = "Rutina Finalizada.";
+                    estadoDiv.style.color = "#5cb85c";
+                    return;
+                }
+
+                estadoDiv.innerText = "La aplicación está hablando...";
+                estadoDiv.style.color = "#0275d8";
+                
+                // Hacemos que el celular hable
+                hablar(pasos[pasoActual].pregunta, true);
+            }
+
+            function hablar(texto, escucharDespues) {
+                const mensaje = new SpeechSynthesisUtterance(texto);
+                mensaje.lang = 'es-PE';
+                mensaje.rate = 1; // Velocidad normal
+                
+                // Cuando termine de hablar, activamos el micrófono
+                mensaje.onend = () => {
+                    if (escucharDespues) {
+                        estadoDiv.innerText = "Escuchando... ¡Diga el valor!";
+                        estadoDiv.style.color = "#d9534f";
+                        document.getElementById(pasos[pasoActual].id).style.borderColor = "#007BFF";
+                        try { recognition.start(); } catch(e) {}
+                    }
+                };
+                
+                synth.speak(mensaje);
+            }
+
+            // Cuando el micrófono captura tu respuesta
+            recognition.onresult = (event) => {
+                let valorDictado = event.results[0][0].transcript;
+                // Filtramos solo números
+                let numeroLimpio = valorDictado.replace(/[^0-9.,]/g, ''); 
+                
+                let inputActual = document.getElementById(pasos[pasoActual].id);
+                inputActual.value = numeroLimpio + " Amp";
+                inputActual.style.borderColor = "#5cb85c";
+
+                pasoActual++; // Avanzamos a la siguiente fase
+                
+                // Damos un pequeño respiro de medio segundo antes de la siguiente pregunta
+                setTimeout(hacerPregunta, 500); 
+            };
+
+            // Si hay ruido y no entiende, repite la pregunta
+            recognition.onerror = (event) => {
+                if (event.error === 'no-speech' || event.error === 'network') {
+                    hablar("No pude escuchar bien. " + pasos[pasoActual].pregunta, true);
+                }
+            };
         }
     </script>
 </body>
