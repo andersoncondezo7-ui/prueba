@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es-PE">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Voz - Mantenimiento</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: auto; }
+        .campo-voz { 
+            width: 100%; padding: 15px; margin-top: 5px; margin-bottom: 20px; 
+            font-size: 16px; border: 2px solid #ccc; border-radius: 8px; box-sizing: border-box; 
+        }
+        label { font-weight: bold; color: #333; }
+        .instrucciones { color: #666; font-size: 14px; margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h2>Registro de Corrientes</h2>
+    <p class="instrucciones">Toca el primer campo y dicta el valor. El sistema escribirá el número y saltará al siguiente cable automáticamente.</p>
+
+    <label for="faseR">Fase R (Amperios):</label>
+    <input type="text" id="faseR" class="campo-voz" placeholder="Toca aquí para dictar...">
+
+    <label for="faseS">Fase S (Amperios):</label>
+    <input type="text" id="faseS" class="campo-voz" placeholder="Toca aquí para dictar...">
+
+    <label for="faseT">Fase T (Amperios):</label>
+    <input type="text" id="faseT" class="campo-voz" placeholder="Toca aquí para dictar...">
+
+    <script>
+        // Inicializamos el motor nativo del navegador
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'es-PE'; // Configurado para nuestro acento
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            const campos = document.querySelectorAll('.campo-voz');
+
+            campos.forEach((campo, index) => {
+                campo.addEventListener('focus', () => {
+                    campo.placeholder = "¡Habla ahora!...";
+                    campo.style.borderColor = "#007BFF"; // Borde azul al escuchar
+                    campo.style.backgroundColor = "#E9F2FF";
+                    
+                    try { recognition.start(); } catch(e) {}
+
+                    recognition.onresult = (event) => {
+                        let valorDictado = event.results[0][0].transcript;
+                        // Extraemos solo los números (ej. si dice "doscientos" tratará de poner 200, si dice "12 amperios" pone 12)
+                        campo.value = valorDictado.replace(/[^0-9.,]/g, ''); 
+                        
+                        campo.style.borderColor = "#28A745"; // Borde verde al terminar
+                        campo.style.backgroundColor = "#E6FFED";
+
+                        // Avanzar al siguiente cable
+                        if (index + 1 < campos.length) {
+                            campos[index + 1].focus();
+                        } else {
+                            // Cuando termina el último
+                            document.activeElement.blur();
+                            setTimeout(() => alert("Mediciones de celda completadas."), 200);
+                        }
+                    };
+
+                    recognition.onspeechend = () => { recognition.stop(); };
+
+                    recognition.onerror = (event) => {
+                        campo.placeholder = "No se escuchó. Toca de nuevo.";
+                        campo.style.borderColor = "#DC3545"; // Borde rojo por error
+                        campo.style.backgroundColor = "#FFECEC";
+                        campo.blur(); // Quitamos el foco para permitir reintentar
+                    };
+                });
+            });
+        } else {
+            alert("Tu navegador no soporta el dictado por voz. Usa Google Chrome.");
+        }
+    </script>
+</body>
+</html>
